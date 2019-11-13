@@ -9,6 +9,8 @@ import pathlib
 import os
 import shutil
 
+import git
+
 import torch
 from torch.nn.parallel import replicate, parallel_apply
 from torch.nn.parallel.scatter_gather import gather
@@ -326,6 +328,19 @@ def create_serialization_dir(
             )
         os.makedirs(serialization_dir, exist_ok=True)
 
+    try:
+        repo = git.Repo(search_parent_directories=True)
+        commit = repo.head.commit
+        authored_time = str(datetime.datetime.fromtimestamp(commit.authored_date))
+        hexsha = commit.hexsha
+        with open(os.path.join(serialization_dir, f'{hexsha}.txt') ,'w') as git_file:
+            git_file.write(f'Remote origin URL: {repo.remotes.origin.url}\n')
+            git_file.write(f'Branch: {repo.active_branch}\n')
+            git_file.write(f'Commit Hash: {hexsha}\n')
+            git_file.write(f'Authored Time: {authored_time}\n')
+            git_file.write(f'Commit Message: {commit.message}\n')
+    except:
+        pass
 
 def data_parallel(
     batch_group: List[TensorDict], model: Model, cuda_devices: List

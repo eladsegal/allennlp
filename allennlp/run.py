@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sklearn # helps with the "cannot load any more object with static TLS" error
 import logging
 import os
 import sys
