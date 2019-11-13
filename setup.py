@@ -133,6 +133,7 @@ setup(
         "pytorch-pretrained-bert>=0.6.0",
         "transformers==2.1.1",
         "jsonpickle",
+        "gitpython>=3.0.4"
     ],
     entry_points={"console_scripts": ["allennlp=allennlp.run:run"]},
     setup_requires=setup_requirements,
