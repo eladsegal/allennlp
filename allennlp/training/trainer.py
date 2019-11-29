@@ -60,7 +60,7 @@ class Trainer(TrainerBase):
         should_log_learning_rate: bool = False,
         log_batch_size_period: Optional[int] = None,
         moving_average: Optional[MovingAverage] = None,
-        gradient_accumulation_batch_size: int = None
+        num_gradient_accumulation_steps: int = 1,
     ) -> None:
         """
         A trainer for doing supervised learning. It just takes a labeled dataset
@@ -172,9 +172,10 @@ class Trainer(TrainerBase):
             parameters. Be careful that when saving the checkpoint, we will save the moving averages of
             parameters. This is necessary because we want the saved model to perform as well as the validated
             model if we load it later. But this may cause problems if you restart the training from checkpoint.
-        gradient_accumulation_batch_size: ``int``, (default = None)
-            if provided, then accumulate gradients until the effective batch
-            size is at least this value.
+        num_gradient_accumulation_steps: ``int``, optional, (default = 1)
+            Gradients are accumulated for the given number of steps before doing an optimizer step. This can
+            be useful to accommodate batches that are larger than the RAM size. Refer Thomas Wolf's
+            [post](https://tinyurl.com/y5mv44fw) for details on Gradient Accumulation.
         """
         super().__init__(serialization_dir, cuda_device)
 
@@ -254,11 +255,19 @@ class Trainer(TrainerBase):
 
         self._last_log = 0.0  # time of last logging
 
+        self._num_gradient_accumulation_steps = num_gradient_accumulation_steps
+
+        if self._num_gradient_accumulation_steps > 1 and self._multiple_gpu:
+            logger.warning(
+                    "You have configured to use multiple GPUs along with gradient accumulation."
+                    "Because of this, the effective batch size will be "
+                    "batch_size * num_gradient_accumulation_steps * number of GPUs")
+
+        self._accumulate_gradients = self._num_gradient_accumulation_steps > 1
+
         # Enable activation logging.
         if histogram_interval is not None:
             self._tensorboard.enable_activation_logging(self.model)
-
-        self.gradient_accumulation_batch_size = gradient_accumulation_batch_size
 
     def rescale_gradients(self) -> Optional[float]:
         return training_util.rescale_gradients(self.model, self._grad_norm)
@@ -306,12 +315,33 @@ class Trainer(TrainerBase):
         # Set the model to "train" mode.
         self.model.train()
 
-        num_gpus = len(self._cuda_devices)
+        # A `batch_group` has chunks of tensors that form a single batch together
+        # for an optimizer step. The length of a single chunk always pertains to
+        # the configured `batch_size` param. However, the number of chunks in a
+        # single `batch_group` corresponds to the way the trainer has been
+        # configured. The lengths of `batch_group` with possible configurations are:
+        #
+        # Singe GPU:
+        #   List of 1 chunk
+        #
+        # `n` GPUs:
+        #   Effective batch size here is `batch_size` * `n`. Hence it is a list of
+        #   `n` chunks.
+        #
+        # Single GPU with `n` accumulation steps:
+        #   Effective batch size here is `batch_size` * `n`. Hence `batch_group` is a
+        #   list of `n` chunks.
+        #
+        # `n` GPUs with `m` accumulation steps:
+        #   Effective batch size here is `batch_size` * `n` * `m`. Hence it is a
+        #   list of `n * m` chunks.
+
+        batch_group_length = self._num_gradient_accumulation_steps * len(self._cuda_devices)
 
         # Get tqdm for the training batches
         raw_train_generator = self.iterator(self.train_data, num_epochs=1, shuffle=self.shuffle)
-        train_generator = lazy_groups_of(raw_train_generator, num_gpus)
-        num_training_batches = math.ceil(self.iterator.get_num_batches(self.train_data) / num_gpus)
+        train_generator = lazy_groups_of(raw_train_generator, batch_group_length)
+        num_training_batches = math.ceil(self.iterator.get_num_batches(self.train_data) / batch_group_length)
         self._last_log = time.time()
         last_save_time = time.time()
 
@@ -324,54 +354,32 @@ class Trainer(TrainerBase):
         logger.info("Training")
         train_generator_tqdm = Tqdm.tqdm(train_generator, total=num_training_batches)
         cumulative_batch_size = 0
-
-        accumulated_batches = []
-        accumulated_batch_sizes = []
-
         for batch_group in train_generator_tqdm:
-            accumulated_batches.append(batch_group)
-            cur_batch = sum([training_util.get_batch_size(batch) for batch in batch_group])
-            accumulated_batch_sizes.append(cur_batch)
-            effective_batch_size = sum(accumulated_batch_sizes)
-
-            # check to see if this is a gradient update step
-            if self.gradient_accumulation_batch_size is None:
-                do_update_grads = True
-            else:
-                if effective_batch_size >= self.gradient_accumulation_batch_size:
-                    do_update_grads = True
-                else:
-                    do_update_grads = False
-
-            if not do_update_grads:
-                # get another batch from the generator
-                continue
-
-            # else run the forward/backward for each batch
             batches_this_epoch += 1
             self._batch_num_total += 1
             batch_num_total = self._batch_num_total
 
             self.optimizer.zero_grad()
 
-            # process all the accumulated gradients
-            for this_batch, this_batch_size in zip(
-                    accumulated_batches, accumulated_batch_sizes
-            ):
-                loss = self.batch_loss(this_batch, for_training=True)
-                loss = loss * (this_batch_size / float(effective_batch_size))
+            # batch_group consists of all the tensors necessary to compute a forward
+            # pass in a single batch. To do gradient accumulation in `n` steps, we split
+            # this group into sub groups further so that we can do forward pass in `n` iterations.
+            #
+            # In case of a single GPU, the size of this sub group essentially is 1. With multiple
+            # GPUs, every `self.batch_loss()` call should be passed with a group that has a length
+            # equal to the number of GPUs.
+            batch_group_for_stepwise_accumulation = lazy_groups_of(iter(batch_group), len(self._cuda_devices))
+            for batch_for_step in batch_group_for_stepwise_accumulation:
+                loss = self.batch_loss(batch_for_step, for_training=True)
 
                 if torch.isnan(loss):
                     raise ValueError("nan loss encountered")
 
+                loss = loss / self._num_gradient_accumulation_steps
                 loss.backward()
 
-                train_loss += loss.item()
+            train_loss += loss.item()
 
-            accumulated_batches = []
-            accumulated_batch_sizes = []
-
-            # now update the gradients
             batch_grad_norm = self.rescale_gradients()
 
             # This does nothing if batch_num_total is None or you are using a
@@ -735,7 +743,7 @@ class Trainer(TrainerBase):
         grad_clipping = params.pop_float("grad_clipping", None)
         lr_scheduler_params = params.pop("learning_rate_scheduler", None)
         momentum_scheduler_params = params.pop("momentum_scheduler", None)
-        gradient_accumulation_batch_size = params.pop_int("gradient_accumulation_batch_size", None)
+        num_gradient_accumulation_steps = params.pop("num_steps_to_accumulate", 1)
 
         if isinstance(cuda_device, list):
             model_device = cuda_device[0]
@@ -818,5 +826,5 @@ class Trainer(TrainerBase):
             should_log_learning_rate=should_log_learning_rate,
             log_batch_size_period=log_batch_size_period,
             moving_average=moving_average,
-            gradient_accumulation_batch_size=gradient_accumulation_batch_size
+            num_gradient_accumulation_steps=num_gradient_accumulation_steps,
         )
