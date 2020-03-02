@@ -39,7 +39,7 @@ class TokenIndexer(Registrable):
     default_implementation = "single_id"
     has_warned_for_as_padded_tensor = False
 
-    def __init__(self, token_min_padding_length: int = 0) -> None:
+    def __init__(self, token_min_padding_length: int = 0, **kwargs) -> None:
         self._token_min_padding_length: int = token_min_padding_length
 
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):

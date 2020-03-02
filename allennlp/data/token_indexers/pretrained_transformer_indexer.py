@@ -43,7 +43,7 @@ class PretrainedTransformerIndexer(TokenIndexer):
     ) -> None:
         super().__init__(**kwargs)
         self._namespace = namespace
-        self._allennlp_tokenizer = PretrainedTransformerTokenizer(model_name)
+        self._allennlp_tokenizer = kwargs.get('allennlp_tokenizer', None) or PretrainedTransformerTokenizer(model_name)
         self._tokenizer = self._allennlp_tokenizer.tokenizer
         self._added_to_vocabulary = False
 
