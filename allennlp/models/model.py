@@ -123,24 +123,22 @@ class Model(torch.nn.Module, Registrable):
 
     def forward_on_instance(self, instance: Instance) -> Dict[str, numpy.ndarray]:
         """
-        Takes an [`Instance`](../data/instance.md), which typically has raw text in it,
-        converts that text into arrays using this model's [`Vocabulary`](../data/vocabulary.md),
-        passes those arrays through `self.forward()` and `self.decode()` (which by default does nothing)
-        and returns the result.  Before returning the result, we convert any
+        Takes an [`Instance`](../data/instance.md), which typically has raw text in it, converts
+        that text into arrays using this model's [`Vocabulary`](../data/vocabulary.md), passes those
+        arrays through `self.forward()` and `self.make_output_human_readable()` (which by default
+        does nothing) and returns the result.  Before returning the result, we convert any
         `torch.Tensors` into numpy arrays and remove the batch dimension.
         """
         return self.forward_on_instances([instance])[0]
 
     def forward_on_instances(self, instances: List[Instance]) -> List[Dict[str, numpy.ndarray]]:
         """
-        Takes a list of `Instances`, converts that text into
-        arrays using this model's `Vocabulary`, passes those arrays through
-        `self.forward()` and `self.decode()` (which by default does nothing)
-        and returns the result.  Before returning the result, we convert any
-        `torch.Tensors` into numpy arrays and separate the
-        batched output into a list of individual dicts per instance. Note that typically
-        this will be faster on a GPU (and conditionally, on a CPU) than repeated calls to
-        `forward_on_instance`.
+        Takes a list of `Instances`, converts that text into arrays using this model's `Vocabulary`,
+        passes those arrays through `self.forward()` and `self.make_output_human_readable()` (which
+        by default does nothing) and returns the result.  Before returning the result, we convert
+        any `torch.Tensors` into numpy arrays and separate the batched output into a list of
+        individual dicts per instance. Note that typically this will be faster on a GPU (and
+        conditionally, on a CPU) than repeated calls to `forward_on_instance`.
 
         # Parameters
 
@@ -157,7 +155,7 @@ class Model(torch.nn.Module, Registrable):
             dataset = Batch(instances)
             dataset.index_instances(self.vocab)
             model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
-            outputs = self.decode(self(**model_input))
+            outputs = self.make_output_human_readable(self(**model_input))
 
             instance_separated_output: List[Dict[str, numpy.ndarray]] = [
                 {} for _ in dataset.instances
@@ -180,19 +178,18 @@ class Model(torch.nn.Module, Registrable):
                     instance_output[name] = batch_element
             return instance_separated_output
 
-    def decode(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def make_output_human_readable(
+        self, output_dict: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         """
-        Takes the result of `forward` and runs inference / decoding / whatever
-        post-processing you need to do your model.  The intent is that `model.forward()` should
-        produce potentials or probabilities, and then `model.decode()` can take those results and
-        run some kind of beam search or constrained inference or whatever is necessary.  This does
-        not handle all possible decoding use cases, but it at least handles simple kinds of
-        decoding.
+        Takes the result of `forward` and makes it human readable.  Most of the time, the only thing
+        this method does is convert tokens / predicted labels from tensors to strings that humans
+        might actually understand.  Somtimes you'll also do an argmax or something in here, too, but
+        that most often happens in `Model.forward`, before you compute your metrics.
 
         This method `modifies` the input dictionary, and also `returns` the same dictionary.
 
-        By default in the base class we do nothing.  If your model has some special decoding step,
-        override this method.
+        By default in the base class we do nothing.
         """
 
         return output_dict
@@ -263,7 +260,7 @@ class Model(torch.nn.Module, Registrable):
         vocab_choice = vocab_params.pop_choice("type", Vocabulary.list_available(), True)
         vocab_class, _ = Vocabulary.resolve_class_name(vocab_choice)
         vocab = vocab_class.from_files(
-            vocab_dir, vocab_params.get("padding_token", None), vocab_params.get("oov_token", None)
+            vocab_dir, vocab_params.get("padding_token"), vocab_params.get("oov_token")
         )
 
         model_params = config.get("model")
@@ -360,14 +357,38 @@ class Model(torch.nn.Module, Registrable):
         embedding_sources_mapping = embedding_sources_mapping or {}
         for model_path, module in self.named_modules():
             if hasattr(module, "extend_vocab"):
-                pretrained_file = embedding_sources_mapping.get(model_path, None)
+                pretrained_file = embedding_sources_mapping.get(model_path)
                 module.extend_vocab(
                     self.vocab, extension_pretrained_file=pretrained_file, model_path=model_path
                 )
 
+    @classmethod
+    def from_archive(cls, archive_file: str, vocab: Vocabulary = None) -> "Model":
+        """
+        Loads a model from an archive file.  This basically just calls
+        `return archival.load_archive(archive_file).model`.  It exists as a method here for
+        convenience, and so that we can register it for easy use for fine tuning an existing model
+        from a config file.
+
+        If `vocab` is given, we will extend the loaded model's vocabulary using the passed vocab
+        object (including calling `extend_embedder_vocab`, which extends embedding layers).
+        """
+        from allennlp.models.archival import load_archive  # here to avoid circular imports
+
+        model = load_archive(archive_file).model
+        if vocab:
+            model.vocab.extend_from_vocab(vocab)
+            model.extend_embedder_vocab()
+        return model
+
+
+# We can't decorate `Model` with `Model.register()`, because `Model` hasn't been defined yet.  So we
+# put this down here.
+Model.register("from_archive", constructor="from_archive")(Model)
+
 
 def remove_pretrained_embedding_params(params: Params):
-    if isinstance(params, Params):  # The model could possible be a string, for example.
+    if isinstance(params, Params):  # The model could possibly be a string, for example.
         keys = params.keys()
         if "pretrained_file" in keys:
             del params["pretrained_file"]

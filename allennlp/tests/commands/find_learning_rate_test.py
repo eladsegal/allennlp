@@ -5,7 +5,8 @@ import pytest
 import torch
 
 from allennlp.common import Params
-from allennlp.data import Vocabulary, DataIterator
+from allennlp.data import Vocabulary
+from allennlp.data import DataLoader
 from allennlp.models import Model
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.testing import AllenNlpTestCase
@@ -17,6 +18,14 @@ from allennlp.commands.find_learning_rate import (
 )
 from allennlp.training import TrainerBase
 from allennlp.training.util import datasets_from_params
+
+
+def is_matplotlib_installed():
+    try:
+        import matplotlib  # noqa: F401 - Matplotlib is optional.
+    except:  # noqa: E722. Any exception means we don't have a working matplotlib.
+        return False
+    return True
 
 
 class TestFindLearningRate(AllenNlpTestCase):
@@ -34,11 +43,12 @@ class TestFindLearningRate(AllenNlpTestCase):
                 "dataset_reader": {"type": "sequence_tagging"},
                 "train_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
                 "validation_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
-                "iterator": {"type": "basic", "batch_size": 2},
+                "data_loader": {"batch_size": 2},
                 "trainer": {"cuda_device": -1, "num_epochs": 2, "optimizer": "adam"},
             }
         )
 
+    @pytest.mark.skipif(not is_matplotlib_installed(), reason="matplotlib dependency is optional")
     def test_find_learning_rate(self):
         find_learning_rate_model(
             self.params(),
@@ -157,7 +167,7 @@ class TestSearchLearningRate(AllenNlpTestCase):
                 "dataset_reader": {"type": "sequence_tagging"},
                 "train_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
                 "validation_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
-                "iterator": {"type": "basic", "batch_size": 2},
+                "data_loader": {"batch_size": 2},
                 "trainer": {"cuda_device": -1, "num_epochs": 2, "optimizer": "adam"},
             }
         )
@@ -167,16 +177,17 @@ class TestSearchLearningRate(AllenNlpTestCase):
             instances=(instance for dataset in all_datasets.values() for instance in dataset),
         )
         model = Model.from_params(vocab=vocab, params=params.pop("model"))
-        iterator = DataIterator.from_params(params.pop("iterator"))
-        iterator.index_with(vocab)
         train_data = all_datasets["train"]
+        train_data.index_with(vocab)
+
+        data_loader = DataLoader.from_params(dataset=train_data, params=params.pop("data_loader"))
         trainer_params = params.pop("trainer")
         serialization_dir = os.path.join(self.TEST_DIR, "test_search_learning_rate")
 
         self.trainer = TrainerBase.from_params(
             model=model,
             serialization_dir=serialization_dir,
-            iterator=iterator,
+            data_loader=data_loader,
             train_data=train_data,
             params=trainer_params,
             validation_data=None,

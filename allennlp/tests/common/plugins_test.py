@@ -12,7 +12,8 @@ from allennlp.common.plugins import (
     import_plugins,
 )
 from allennlp.common.testing import AllenNlpTestCase
-from allennlp.tests.common.plugins_util import pip_install, push_python_project
+from allennlp.common.util import pushd
+from allennlp.tests.common.plugins_util import pip_install
 
 
 class TestPlugins(AllenNlpTestCase):
@@ -73,7 +74,7 @@ class TestPlugins(AllenNlpTestCase):
         available_plugins = set(discover_plugins())
         self.assertSetEqual(set(), available_plugins)
 
-        with push_python_project(self.project_b_fixtures_root):
+        with pushd(self.project_b_fixtures_root):
             available_plugins = set(discover_plugins())
             self.assertSetEqual({"allennlp_plugins.b"}, available_plugins)
 
@@ -85,7 +86,7 @@ class TestPlugins(AllenNlpTestCase):
         available_plugins = set(discover_plugins())
         self.assertSetEqual(set(), available_plugins)
 
-        with push_python_project(self.project_d_fixtures_root):
+        with pushd(self.project_d_fixtures_root):
             available_plugins = set(discover_plugins())
             self.assertSetEqual({"d"}, available_plugins)
 
@@ -100,9 +101,10 @@ class TestPlugins(AllenNlpTestCase):
         with tempfile.TemporaryDirectory() as temp_dir_b:
             distutils.dir_util.copy_tree(self.project_b_fixtures_root, temp_dir_b)
 
-            # We move to another directory with a different plugin "b", as if it were another separate project
-            # which is not installed ("local" usage of the plugin declared in the namespace).
-            with push_python_project(temp_dir_b):
+            # We move to another directory with a different plugin "b", as if it were another
+            # separate project which is not installed ("local" usage of the plugin declared in
+            # the namespace).
+            with pushd(temp_dir_b):
                 available_plugins = set(discover_plugins())
                 self.assertSetEqual({"allennlp_plugins.b"}, available_plugins)
 
@@ -114,13 +116,13 @@ class TestPlugins(AllenNlpTestCase):
         available_plugins = set(discover_plugins())
         self.assertSetEqual(set(), available_plugins)
 
-        # We make plugins "a" and "c" available as packages, each from other directories, as if they were
-        # separate installed projects ("global" usage of the plugins).
-        # We move to another directory with a different plugin "b", as if it were another separate project
-        # which is not installed ("local" usage of the plugin declared in the namespace).
+        # We make plugins "a" and "c" available as packages, each from other directories,
+        # as if they were separate installed projects ("global" usage of the plugins).
+        # We move to another directory with a different plugin "b", as if it were another separate
+        # project which is not installed ("local" usage of the plugin declared in the namespace).
         with pip_install(self.project_a_fixtures_root, "a"), pip_install(
             self.project_c_fixtures_root, "c"
-        ), push_python_project(self.project_b_fixtures_root):
+        ), pushd(self.project_b_fixtures_root):
             available_plugins = set(discover_plugins())
             self.assertSetEqual(
                 {"allennlp_plugins.a", "allennlp_plugins.b", "allennlp_plugins.c"},
@@ -137,13 +139,13 @@ class TestPlugins(AllenNlpTestCase):
         available_plugins = set(discover_plugins())
         self.assertSetEqual(set(), available_plugins)
 
-        # We make plugins "a" and "c" available as packages, each from other directories, as if they were
-        # separate installed projects ("global" usage of the plugins).
-        # We move to another directory with a different plugin "b", as if it were another separate project
-        # which is not installed ("local" usage of the plugin declared in a file).
+        # We make plugins "a" and "c" available as packages, each from other directories,
+        # as if they were separate installed projects ("global" usage of the plugins).
+        # We move to another directory with a different plugin "b", as if it were another separate
+        # project which is not installed ("local" usage of the plugin declared in a file).
         with pip_install(self.project_a_fixtures_root, "a"), pip_install(
             self.project_c_fixtures_root, "c"
-        ), push_python_project(self.project_d_fixtures_root):
+        ), pushd(self.project_d_fixtures_root):
             available_plugins = set(discover_plugins())
             self.assertSetEqual(
                 {"allennlp_plugins.a", "allennlp_plugins.c", "d"}, available_plugins

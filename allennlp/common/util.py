@@ -112,8 +112,11 @@ def group_by_count(iterable: List[Any], count: int, default_value: Any) -> List[
     list at the end if the list is not divisable by `count`.
 
     For example:
+
+    ```
     >>> group_by_count([1, 2, 3, 4, 5, 6, 7], 3, 0)
     [[1, 2, 3], [4, 5, 6], [7, 0, 0]]
+    ```
 
     This is a short method, but it's complicated and hard to remember as a one-liner, so we just
     make a function out of it.
@@ -434,7 +437,7 @@ def push_python_path(path: PathType) -> ContextManagerFunctionReturnType[None]:
         sys.path.remove(path)
 
 
-def import_submodules(package_name: str) -> None:
+def import_module_and_submodules(package_name: str) -> None:
     """
     Import all submodules under the given package.
     Primarily useful so that people using AllenNLP as a library
@@ -459,7 +462,7 @@ def import_submodules(package_name: str) -> None:
             if path_string and module_finder.path != path_string:
                 continue
             subpackage = f"{package_name}.{name}"
-            import_submodules(subpackage)
+            import_module_and_submodules(subpackage)
 
 
 def peak_memory_mb() -> float:

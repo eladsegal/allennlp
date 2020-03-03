@@ -2,26 +2,19 @@ import inspect
 import os
 
 import pytest
-import torch
-import torch.nn.init
-import torch.optim.lr_scheduler
 
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.registrable import Registrable
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.common.util import push_python_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.iterators.data_iterator import DataIterator
+from allennlp.data.samplers import Sampler, BatchSampler
 from allennlp.data.token_indexers.token_indexer import TokenIndexer
 from allennlp.data.tokenizers.tokenizer import Tokenizer
-from allennlp.modules.seq2seq_encoders.seq2seq_encoder import Seq2SeqEncoder
-from allennlp.modules.seq2vec_encoders.seq2vec_encoder import Seq2VecEncoder
 from allennlp.modules.similarity_functions import SimilarityFunction
 from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
 from allennlp.modules.token_embedders.token_embedder import TokenEmbedder
-from allennlp.nn import Initializer
 from allennlp.nn.regularizers.regularizer import Regularizer
-from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 
 
 class TestRegistrable(AllenNlpTestCase):
@@ -80,9 +73,10 @@ class TestRegistrable(AllenNlpTestCase):
 
     # TODO(mattg): maybe move all of these into tests for the base class?
 
-    def test_registry_has_builtin_iterators(self):
-        assert DataIterator.by_name("basic").__name__ == "BasicIterator"
-        assert DataIterator.by_name("bucket").__name__ == "BucketIterator"
+    def test_registry_has_builtin_samplers(self):
+        assert Sampler.by_name("random").__name__ == "RandomSampler"
+        assert Sampler.by_name("sequential").__name__ == "SequentialSampler"
+        assert BatchSampler.by_name("bucket").__name__ == "BucketBatchSampler"
 
     def test_registry_has_builtin_tokenizers(self):
         assert Tokenizer.by_name("spacy").__name__ == "SpacyTokenizer"
@@ -97,7 +91,7 @@ class TestRegistrable(AllenNlpTestCase):
         assert Regularizer.by_name("l2").__name__ == "L2Regularizer"
 
     def test_registry_has_builtin_token_embedders(self):
-        assert TokenEmbedder.by_name("embedding").__name__ == "from_vocab_or_file"
+        assert TokenEmbedder.by_name("embedding").__name__ == "Embedding"
         assert TokenEmbedder.by_name("character_encoding").__name__ == "TokenCharactersEncoder"
 
     def test_registry_has_builtin_text_field_embedders(self):

@@ -1,12 +1,11 @@
 import copy
-import os
 
 import torch
 
+from allennlp.commands.train import train_model
 from allennlp.common import Params
 from allennlp.common.testing import AllenNlpTestCase
-from allennlp.commands.train import train_model
-from allennlp.models.archival import load_archive, archive_model
+from allennlp.models.archival import archive_model, load_archive
 
 
 def assert_models_equal(model, model2):
@@ -43,7 +42,7 @@ class ArchivalTest(AllenNlpTestCase):
                 "dataset_reader": {"type": "sequence_tagging"},
                 "train_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
                 "validation_data_path": str(self.FIXTURES_ROOT / "data" / "sequence_tagging.tsv"),
-                "iterator": {"type": "basic", "batch_size": 2},
+                "data_loader": {"batch_size": 2},
                 "trainer": {"num_epochs": 2, "optimizer": "adam"},
             }
         )

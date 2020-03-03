@@ -1,37 +1,36 @@
 import json
 import logging
-from typing import Union, List, Dict, Any
 import warnings
-
-import torch
-from torch.nn.modules import Dropout
+from typing import Any, Dict, List, Union
 
 import numpy
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    import h5py
+import torch
 from overrides import overrides
+from torch.nn.modules import Dropout
 
-from allennlp.common.file_utils import cached_path
-from allennlp.common.checks import ConfigurationError
-from allennlp.common.util import lazy_groups_of
 from allennlp.common import FromParams
-from allennlp.modules.elmo_lstm import ElmoLstm
-from allennlp.modules.highway import Highway
-from allennlp.modules.scalar_mix import ScalarMix
-from allennlp.nn.util import (
-    remove_sentence_boundaries,
-    add_sentence_boundary_token_ids,
-    get_device_of,
-)
+from allennlp.common.checks import ConfigurationError
+from allennlp.common.file_utils import cached_path
+from allennlp.common.util import lazy_groups_of
+from allennlp.data import Instance, Token, Vocabulary
+from allennlp.data.batch import Batch
+from allennlp.data.fields import TextField
 from allennlp.data.token_indexers.elmo_indexer import (
     ELMoCharacterMapper,
     ELMoTokenCharactersIndexer,
 )
-from allennlp.data.batch import Batch
-from allennlp.data import Token, Vocabulary, Instance
-from allennlp.data.fields import TextField
+from allennlp.modules.elmo_lstm import ElmoLstm
+from allennlp.modules.highway import Highway
+from allennlp.modules.scalar_mix import ScalarMix
+from allennlp.nn.util import (
+    add_sentence_boundary_token_ids,
+    get_device_of,
+    remove_sentence_boundaries,
+)
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    import h5py
 
 
 logger = logging.getLogger(__name__)
@@ -155,7 +154,7 @@ class Elmo(torch.nn.Module, FromParams):
         `'elmo_representations'` : `List[torch.Tensor]`
             A `num_output_representations` list of ELMo representations for the input sequence.
             Each representation is shape `(batch_size, timesteps, embedding_dim)`
-        `'mask'`:  `torch.Tensor`
+        `'mask'`:  `torch.BoolTensor`
             Shape `(batch_size, timesteps)` long tensor with sequence mask.
         """
         # reshape the input if needed
@@ -328,11 +327,11 @@ class _ElmoCharacterEncoder(torch.nn.Module):
         `'token_embedding'` : `torch.Tensor`
             Shape `(batch_size, sequence_length + 2, embedding_dim)` tensor with context
             insensitive token representations.
-        `'mask'`:  `torch.Tensor`
+        `'mask'`:  `torch.BoolTensor`
             Shape `(batch_size, sequence_length + 2)` long tensor with sequence mask.
         """
         # Add BOS/EOS
-        mask = ((inputs > 0).long().sum(dim=-1) > 0).long()
+        mask = (inputs > 0).sum(dim=-1) > 0
         character_ids_with_bos_eos, mask_with_bos_eos = add_sentence_boundary_token_ids(
             inputs, mask, self._beginning_of_sentence_characters, self._end_of_sentence_characters
         )
@@ -568,7 +567,7 @@ class _ElmoBiLm(torch.nn.Module):
         `'activations'` : `List[torch.Tensor]`
             A list of activations at each layer of the network, each of shape
             `(batch_size, timesteps + 2, embedding_dim)`
-        `'mask'`:  `torch.Tensor`
+        `'mask'`:  `torch.BoolTensor`
             Shape `(batch_size, timesteps + 2)` long tensor with sequence mask.
 
         Note that the output tensors all include additional special begin and end of sequence
@@ -576,7 +575,7 @@ class _ElmoBiLm(torch.nn.Module):
         """
         if self._word_embedding is not None and word_inputs is not None:
             try:
-                mask_without_bos_eos = (word_inputs > 0).long()
+                mask_without_bos_eos = word_inputs > 0
                 # The character cnn part is cached - just look it up.
                 embedded_inputs = self._word_embedding(word_inputs)  # type: ignore
                 # shape (batch_size, timesteps + 2, embedding_dim)
@@ -602,8 +601,7 @@ class _ElmoBiLm(torch.nn.Module):
         # mask passed on is correct, but the values in the padded areas
         # of the char cnn representations can change.
         output_tensors = [
-            torch.cat([type_representation, type_representation], dim=-1)
-            * mask.float().unsqueeze(-1)
+            torch.cat([type_representation, type_representation], dim=-1) * mask.unsqueeze(-1)
         ]
         for layer_activations in torch.chunk(lstm_outputs, lstm_outputs.size(0), dim=0):
             output_tensors.append(layer_activations.squeeze(0))
@@ -666,8 +664,8 @@ class _ElmoBiLm(torch.nn.Module):
         self._bos_embedding = full_embedding[0, :]
         self._eos_embedding = full_embedding[1, :]
         self._word_embedding = Embedding(  # type: ignore
-            vocab_size,
-            embedding_dim,
+            num_embeddings=vocab_size,
+            embedding_dim=embedding_dim,
             weight=embedding.data,
             trainable=self._requires_grad,
             padding_index=0,
