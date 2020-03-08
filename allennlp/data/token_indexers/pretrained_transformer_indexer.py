@@ -85,6 +85,13 @@ class PretrainedTransformerIndexer(TokenIndexer):
                 vocab._token_to_index[self._namespace][word] = idx
                 vocab._index_to_token[self._namespace][idx] = word
 
+            # update oov, padding and added tokens
+            vocab._oov_token = self._tokenizer.unk_token
+            vocab._padding_token = self._tokenizer.pad_token
+            for word, idx in self._tokenizer.added_tokens_encoder.items():
+                vocab._token_to_index[self._namespace][word] = idx
+                vocab._index_to_token[self._namespace][idx] = word
+
         self._added_to_vocabulary = True
 
     @overrides

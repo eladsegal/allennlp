@@ -647,6 +647,13 @@ class TrainModel(Registrable):
         vocabulary_ = vocabulary.construct(instances=instance_generator)
         if not vocabulary_:
             vocabulary_ = Vocabulary.from_instances(instance_generator)
+
+        # Hack to make the vocabulary available for the model instantiation
+        for key, dataset in datasets.items():
+            for instance in dataset:
+                instance.index_fields(vocabulary_)
+                break
+
         model_ = model.construct(vocab=vocabulary_)
 
         # Initializing the model can have side effect of expanding the vocabulary.
