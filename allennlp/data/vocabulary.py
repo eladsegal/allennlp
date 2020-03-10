@@ -588,7 +588,7 @@ class Vocabulary(Registrable):
                 os.path.join(directory, namespace + ".txt"), "w", "utf-8"
             ) as token_file:
                 num_tokens = len(mapping)
-                start_index = 1 if mapping[0] == self._padding_token else 0
+                start_index = 1 if mapping[0] == self._padding_token else 0 # start_index = 0
                 for i in range(start_index, num_tokens):
                     print(mapping[i].replace("\n", "@@NEWLINE@@"), file=token_file)
 
