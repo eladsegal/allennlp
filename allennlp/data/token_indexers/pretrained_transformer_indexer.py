@@ -191,15 +191,14 @@ class PretrainedTransformerIndexer(TokenIndexer):
         # Different transformers use different padding values for tokens, but for mask and type id, the padding
         # value is always 0.
         return {
-            key: torch.tensor(
+            key: torch.LongTensor(
                 pad_sequence_to_length(
                     val,
                     padding_lengths[key],
                     default_value=lambda: 0
                     if key in {"mask", "type_ids"}
                     else self._tokenizer.pad_token_id,
-                ),
-                dtype=torch.long if key != "mask" else torch.bool
+                )
             )
             for key, val in tokens.items()
         }
