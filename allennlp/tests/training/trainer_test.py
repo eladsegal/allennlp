@@ -23,6 +23,7 @@ from allennlp.data.dataset_readers import SequenceTaggingDatasetReader
 from allennlp.models.model import Model
 from allennlp.models.simple_tagger import SimpleTagger
 from allennlp.training import Trainer
+from allennlp.training.learning_rate_schedulers import CosineWithRestarts
 from allennlp.training.learning_rate_schedulers import ExponentialLearningRateScheduler
 from allennlp.training.momentum_schedulers import MomentumScheduler
 from allennlp.training.moving_average import ExponentialMovingAverage
@@ -30,7 +31,7 @@ from allennlp.training.util import sparse_clip_norm
 from allennlp.data import allennlp_collate
 
 
-class TestTrainer(AllenNlpTestCase):
+class TrainerTestBase(AllenNlpTestCase):
     def setUp(self):
         super().setUp()
         self.instances = SequenceTaggingDatasetReader().read(
@@ -54,6 +55,8 @@ class TestTrainer(AllenNlpTestCase):
         )
         self.instances.index_with(vocab)
 
+
+class TestTrainer(TrainerTestBase):
     def test_trainer_can_run(self):
         trainer = Trainer(
             model=self.model,
@@ -125,21 +128,6 @@ class TestTrainer(AllenNlpTestCase):
             Trainer(
                 self.model, self.optimizer, self.data_loader, num_epochs=2, cuda_device=[0, 1],
             )
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="No CUDA device registered.")
-    @pytest.mark.skipif(amp is None, reason="Apex is not installed.")
-    def test_trainer_can_run_amp(self):
-
-        self.model.cuda()
-        trainer = Trainer(
-            self.model,
-            self.optimizer,
-            self.data_loader,
-            num_epochs=2,
-            cuda_device=0,
-            opt_level="O1",
-        )
-        _ = trainer.train()
 
     def test_trainer_can_resume_training(self):
         trainer = Trainer(
@@ -444,7 +432,7 @@ class TestTrainer(AllenNlpTestCase):
         trainer.train()
 
     def test_trainer_can_resume_with_lr_scheduler(self):
-        lr_scheduler = ExponentialLearningRateScheduler(self.optimizer, gamma=0.5)
+        lr_scheduler = CosineWithRestarts(self.optimizer, t_initial=5)
         trainer = Trainer(
             model=self.model,
             optimizer=self.optimizer,
@@ -456,7 +444,7 @@ class TestTrainer(AllenNlpTestCase):
         )
         trainer.train()
 
-        new_lr_scheduler = ExponentialLearningRateScheduler(self.optimizer, gamma=0.5)
+        new_lr_scheduler = CosineWithRestarts(self.optimizer, t_initial=5)
         new_trainer = Trainer(
             model=self.model,
             optimizer=self.optimizer,
@@ -468,7 +456,7 @@ class TestTrainer(AllenNlpTestCase):
         )
         epoch = new_trainer._restore_checkpoint()
         assert epoch == 2
-        assert new_trainer._learning_rate_scheduler.lr_scheduler.last_epoch == 1
+        assert new_trainer._learning_rate_scheduler.last_epoch == 1
         new_trainer.train()
 
     def test_trainer_raises_on_model_with_no_loss_key(self):
@@ -800,6 +788,23 @@ class TestTrainer(AllenNlpTestCase):
         )
 
         assert num_batches_trained_per_epoch == num_batches_expected
+
+
+class TestApexTrainer(TrainerTestBase):
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="No CUDA device registered.")
+    @pytest.mark.skipif(amp is None, reason="Apex is not installed.")
+    @pytest.mark.spawn
+    def test_trainer_can_run_amp(self):
+        self.model.cuda()
+        trainer = Trainer(
+            self.model,
+            self.optimizer,
+            self.data_loader,
+            num_epochs=2,
+            cuda_device=0,
+            opt_level="O1",
+        )
+        _ = trainer.train()
 
 
 class TestSparseClipGrad(AllenNlpTestCase):

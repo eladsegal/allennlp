@@ -17,7 +17,7 @@ from allennlp.models import load_archive
 
 class TestNnUtil(AllenNlpTestCase):
     def test_get_sequence_lengths_from_binary_mask(self):
-        binary_mask = torch.BoolTensor(
+        binary_mask = torch.tensor(
             [
                 [True, True, True, False, False, False],
                 [True, True, False, False, False, False],
@@ -1602,3 +1602,36 @@ class TestNnUtil(AllenNlpTestCase):
 
     def assert_array_equal_with_mask(self, a, b, mask):
         numpy.testing.assert_array_equal((a * mask).data.numpy(), (b * mask).data.numpy())
+
+    def test_tensors_equal(self):
+        # Basic
+        assert util.tensors_equal(torch.tensor([1]), torch.tensor([1]))
+        assert not util.tensors_equal(torch.tensor([1]), torch.tensor([2]))
+
+        # Bool
+        assert util.tensors_equal(torch.tensor([True]), torch.tensor([True]))
+
+        # Cross dtype
+        assert util.tensors_equal(torch.tensor([1]), torch.tensor([1.0]))
+        assert util.tensors_equal(torch.tensor([1]), torch.tensor([True]))
+
+        # Containers
+        assert util.tensors_equal([torch.tensor([1])], [torch.tensor([1])])
+        assert not util.tensors_equal([torch.tensor([1])], [torch.tensor([2])])
+        assert util.tensors_equal({"key": torch.tensor([1])}, {"key": torch.tensor([1])})
+
+    def test_info_value_of_dtype(self):
+        with pytest.raises(TypeError):
+            util.info_value_of_dtype(torch.bool)
+
+        assert util.min_value_of_dtype(torch.half) == -65504.0
+        assert util.max_value_of_dtype(torch.half) == 65504.0
+        assert util.tiny_value_of_dtype(torch.half) == 1e-4
+        assert util.min_value_of_dtype(torch.float) == -3.4028234663852886e38
+        assert util.max_value_of_dtype(torch.float) == 3.4028234663852886e38
+        assert util.tiny_value_of_dtype(torch.float) == 1e-13
+
+        assert util.min_value_of_dtype(torch.uint8) == 0
+        assert util.max_value_of_dtype(torch.uint8) == 255
+        assert util.min_value_of_dtype(torch.long) == -9223372036854775808
+        assert util.max_value_of_dtype(torch.long) == 9223372036854775807
