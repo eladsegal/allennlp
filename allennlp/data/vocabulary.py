@@ -259,10 +259,13 @@ class Vocabulary(Registrable):
         padding_token = padding_token if padding_token is not None else DEFAULT_PADDING_TOKEN
         oov_token = oov_token if oov_token is not None else DEFAULT_OOV_TOKEN
         namespace_token_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        first_instance = None
         for instance in Tqdm.tqdm(instances):
             instance.count_vocab_items(namespace_token_counts)
+            if first_instance is None:
+                first_instance = instance
 
-        return cls(
+        vocab = cls(
             counter=namespace_token_counts,
             min_count=min_count,
             max_vocab_size=max_vocab_size,
@@ -274,6 +277,8 @@ class Vocabulary(Registrable):
             padding_token=padding_token,
             oov_token=oov_token,
         )
+        first_instance.index_fields(vocab)
+        return vocab
 
     @classmethod
     def from_files(

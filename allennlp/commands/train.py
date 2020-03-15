@@ -393,7 +393,7 @@ def _train_worker(
     best_model : `Optional[Model]`
         The model with the best epoch weights or `None` if in distributed training or in dry run.
     """
-    common_util.prepare_global_logging(
+    stdout_handler = common_util.prepare_global_logging(
         serialization_dir, file_friendly_logging, rank=process_rank, world_size=world_size
     )
     common_util.prepare_environment(params)
@@ -472,6 +472,8 @@ def _train_worker(
 
     if master:
         train_loop.finish(metrics)
+
+    common_util.cleanup_global_logging(stdout_handler)
 
     if not distributed:
         return train_loop.model
@@ -648,13 +650,6 @@ class TrainModel(Registrable):
         vocabulary_ = vocabulary.construct(instances=instance_generator)
         if not vocabulary_:
             vocabulary_ = Vocabulary.from_instances(instance_generator)
-
-        # Hack to make the vocabulary available for the model instantiation
-        for key, dataset in datasets.items():
-            for instance in dataset:
-                instance.index_fields(vocabulary_)
-                break
-
         model_ = model.construct(vocab=vocabulary_)
 
         # Initializing the model can have side effect of expanding the vocabulary.
