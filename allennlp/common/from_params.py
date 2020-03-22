@@ -152,11 +152,15 @@ def infer_params(cls: Type[T], constructor: Callable[..., T] = None):
         return parameters
 
     # "mro" is "method resolution order".  The first one is the current class, the next is the
-    # first superclass, and so on.  Taking the first superclass should work in almost all cases that
-    # we're looking for here.  This could fail, though, if you are using multiple inheritance and we
-    # pick the wrong superclass.  We'll worry about how to fix that when we run into an actual
-    # problem because of it.
-    super_class = cls.mro()[1]
+    # first superclass, and so on.  We take the first superclass we find that inherits from
+    # FromParams.
+    super_class = None
+    for super_class_candidate in cls.mro()[1:]:
+        if issubclass(super_class_candidate, FromParams):
+            super_class = super_class_candidate
+            break
+    if not super_class:
+        raise RuntimeError("found a kwargs parameter with no inspectable super class")
     super_parameters = infer_params(super_class)
 
     return {**super_parameters, **parameters}  # Subclass parameters overwrite superclass ones
@@ -336,11 +340,10 @@ def construct_arg(
             # In some cases we allow a string instead of a param dict, so
             # we need to handle that case separately.
             if isinstance(popped_params, str):
-                return annotation.by_name(popped_params)()
-            else:
-                if isinstance(popped_params, dict):
-                    popped_params = Params(popped_params)
-                return annotation.from_params(params=popped_params, **subextras)
+                popped_params = Params({"type": popped_params})
+            elif isinstance(popped_params, dict):
+                popped_params = Params(popped_params)
+            return annotation.from_params(params=popped_params, **subextras)
         elif not optional:
             # Not optional and not supplied, that's an error!
             raise ConfigurationError(f"expected key {argument_name} for {class_name}")
@@ -549,6 +552,14 @@ class FromParams:
 
         if isinstance(params, str):
             params = Params({"type": params})
+
+        if not isinstance(params, Params):
+            raise ConfigurationError(
+                "from_params was passed a `params` object that was not a `Params`. This probably "
+                "indicates malformed parameters in a configuration file, where something that "
+                "should have been a dictionary was actually a list, or something else. "
+                f"This happened when constructing an object of type {cls}."
+            )
 
         registered_subclasses = Registrable._registry.get(cls)
 
