@@ -41,6 +41,7 @@ class Token:
 
     text: Optional[str] = None
     idx: Optional[int] = None
+    end_idx: Optional[int] = None
     lemma_: Optional[str] = None
     pos_: Optional[str] = None
     tag_: Optional[str] = None
@@ -60,6 +61,7 @@ def show_token(token: Token) -> str:
     return (
         f"{token.text} "
         f"(idx: {token.idx}) "
+        f"(end_idx: {token.end_idx}) "
         f"(lemma: {token.lemma_}) "
         f"(pos: {token.pos_}) "
         f"(tag: {token.tag_}) "

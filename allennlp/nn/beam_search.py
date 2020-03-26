@@ -96,6 +96,7 @@ class BeamSearch:
         # List of (batch_size, beam_size) tensors. One for each time step. Does not
         # include the start symbols, which are implicit.
         predictions: List[torch.Tensor] = []
+        full_probs_per_step: List[torch.Tensor] = []
 
         # List of (batch_size, beam_size) tensors. One for each time step. None for
         # the first.  Stores the index n for the parent prediction, i.e.
@@ -139,6 +140,8 @@ class BeamSearch:
 
         # shape: [(batch_size, beam_size)]
         predictions.append(start_predicted_classes)
+
+        full_probs_per_step.append(start_class_log_probabilities)
 
         # Log probability tensor that mandates that the end token is selected.
         # shape: (batch_size * beam_size, num_classes)
@@ -186,6 +189,8 @@ class BeamSearch:
                 log_probs_after_end,
                 class_log_probabilities,
             )
+
+            full_probs_per_step.append(cleaned_log_probabilities.reshape((batch_size, self.beam_size, -1)))
 
             # shape (both): (batch_size * beam_size, per_node_beam_size)
             top_log_probabilities, predicted_classes = cleaned_log_probabilities.topk(
@@ -268,6 +273,7 @@ class BeamSearch:
         # Reconstruct the sequences.
         # shape: [(batch_size, beam_size, 1)]
         reconstructed_predictions = [predictions[-1].unsqueeze(2)]
+        reconstructed_full_probs = [full_probs_per_step[-1]]
 
         # shape: (batch_size, beam_size)
         cur_backpointers = backpointers[-1]
@@ -275,18 +281,24 @@ class BeamSearch:
         for timestep in range(len(predictions) - 2, 0, -1):
             # shape: (batch_size, beam_size, 1)
             cur_preds = predictions[timestep].gather(1, cur_backpointers).unsqueeze(2)
+            cur_probs = full_probs_per_step[timestep].gather(1, cur_backpointers.unsqueeze(2).repeat(1, 1, num_classes))
 
             reconstructed_predictions.append(cur_preds)
+            reconstructed_full_probs.append(cur_probs)
 
             # shape: (batch_size, beam_size)
             cur_backpointers = backpointers[timestep - 1].gather(1, cur_backpointers)
 
         # shape: (batch_size, beam_size, 1)
         final_preds = predictions[0].gather(1, cur_backpointers).unsqueeze(2)
+        final_probs = full_probs_per_step[0].unsqueeze(1).expand(-1, self.beam_size, -1)
 
         reconstructed_predictions.append(final_preds)
+        reconstructed_full_probs.append(final_probs)
 
         # shape: (batch_size, beam_size, max_steps)
         all_predictions = torch.cat(list(reversed(reconstructed_predictions)), 2)
+        all_probs = (torch.cat(list(reversed(reconstructed_full_probs)), 2)
+                    .reshape((batch_size, self.beam_size, len(reconstructed_full_probs), -1)))
 
-        return all_predictions, last_log_probabilities
+        return all_predictions, last_log_probabilities, all_probs

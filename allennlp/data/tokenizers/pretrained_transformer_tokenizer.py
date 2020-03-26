@@ -68,6 +68,9 @@ class PretrainedTransformerTokenizer(Tokenizer):
         tokenizer_kwargs: Dict[str, Any] = None,
     ) -> None:
         tokenizer_kwargs = tokenizer_kwargs or {}
+        self._use_fast = tokenizer_kwargs.get('use_fast', False) if tokenizer_kwargs is not None else False
+        if self._use_fast:
+            tokenizer_kwargs['add_special_tokens'] = add_special_tokens
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
 
         # Huggingface tokenizers have different ways of remembering whether they lowercase or not. Detecting it
@@ -98,11 +101,12 @@ class PretrainedTransformerTokenizer(Tokenizer):
         encoded_tokens = self.tokenizer.encode_plus(
             text=sentence_1,
             text_pair=sentence_2,
-            add_special_tokens=self._add_special_tokens,
+            add_special_tokens=self._add_special_tokens if not self._use_fast else True,
             max_length=self._max_length,
             stride=self._stride,
             truncation_strategy=self._truncation_strategy,
             return_tensors=None,
+            return_offsets_mapping=self._use_fast
         )
         # token_ids contains a final list with ids for both regular and special tokens
         token_ids, token_type_ids = encoded_tokens["input_ids"], encoded_tokens["token_type_ids"]
@@ -113,59 +117,65 @@ class PretrainedTransformerTokenizer(Tokenizer):
             tokens.append(Token(text=token_str, text_id=token_id, type_id=token_type_id))
 
         if self._calculate_character_offsets:
-            # The huggingface tokenizers produce tokens that may or may not be slices from the
-            # original text.  Differences arise from lowercasing, Unicode normalization, and other
-            # kinds of normalization, as well as special characters that are included to denote
-            # various situations, such as "##" in BERT for word pieces from the middle of a word, or
-            # "Ġ" in RoBERTa for the beginning of words not at the start of a sentence.
+            if self._use_fast:
+                offset_mapping = encoded_tokens["offset_mapping"]
+                for token, offset in zip(tokens, offset_mapping):
+                     token.idx = offset[0]
+                     token.end_idx = offset[1]
+            else:
+                # The huggingface tokenizers produce tokens that may or may not be slices from the
+                # original text.  Differences arise from lowercasing, Unicode normalization, and other
+                # kinds of normalization, as well as special characters that are included to denote
+                # various situations, such as "##" in BERT for word pieces from the middle of a word, or
+                # "Ġ" in RoBERTa for the beginning of words not at the start of a sentence.
 
-            # This code attempts to calculate character offsets while being tolerant to these
-            # differences. It scans through the text and the tokens in parallel, trying to match up
-            # positions in both. If it gets out of sync, it backs off to not adding any token
-            # indices, and attempts to catch back up afterwards. This procedure is approximate.
-            # Don't rely on precise results, especially in non-English languages that are far more
-            # affected by Unicode normalization.
+                # This code attempts to calculate character offsets while being tolerant to these
+                # differences. It scans through the text and the tokens in parallel, trying to match up
+                # positions in both. If it gets out of sync, it backs off to not adding any token
+                # indices, and attempts to catch back up afterwards. This procedure is approximate.
+                # Don't rely on precise results, especially in non-English languages that are far more
+                # affected by Unicode normalization.
 
-            whole_text = sentence_1
-            if sentence_2 is not None:
-                whole_text += sentence_2  # Calculating character offsets with sentence pairs is sketchy at best.
-            if self._tokenizer_lowercases:
-                whole_text = whole_text.lower()
-
-            min_allowed_skipped_whitespace = 3
-            allowed_skipped_whitespace = min_allowed_skipped_whitespace
-
-            text_index = 0
-            token_index = 0
-            while text_index < len(whole_text) and token_index < len(tokens):
-                token_text = tokens[token_index].text
+                whole_text = sentence_1
+                if sentence_2 is not None:
+                    whole_text += sentence_2  # Calculating character offsets with sentence pairs is sketchy at best.
                 if self._tokenizer_lowercases:
-                    token_text = token_text.lower()
-                token_text = sanitize_wordpiece(token_text)
-                token_start_index = whole_text.find(token_text, text_index)
+                    whole_text = whole_text.lower()
 
-                # Did we not find it at all?
-                if token_start_index < 0:
-                    token_index += 1
-                    # When we skip a token, we increase our tolerance, so we have a chance of catching back up.
-                    allowed_skipped_whitespace += 1 + min_allowed_skipped_whitespace
-                    continue
-
-                # Did we jump too far?
-                non_whitespace_chars_skipped = sum(
-                    1 for c in whole_text[text_index:token_start_index] if not c.isspace()
-                )
-                if non_whitespace_chars_skipped > allowed_skipped_whitespace:
-                    # Too many skipped characters. Something is wrong. Ignore this token.
-                    token_index += 1
-                    # When we skip a token, we increase our tolerance, so we have a chance of catching back up.
-                    allowed_skipped_whitespace += 1 + min_allowed_skipped_whitespace
-                    continue
+                min_allowed_skipped_whitespace = 3
                 allowed_skipped_whitespace = min_allowed_skipped_whitespace
 
-                tokens[token_index].idx = token_start_index
-                text_index = token_start_index + len(token_text)
-                token_index += 1
+                text_index = 0
+                token_index = 0
+                while text_index < len(whole_text) and token_index < len(tokens):
+                    token_text = tokens[token_index].text
+                    if self._tokenizer_lowercases:
+                        token_text = token_text.lower()
+                    token_text = sanitize_wordpiece(token_text)
+                    token_start_index = whole_text.find(token_text, text_index)
+
+                    # Did we not find it at all?
+                    if token_start_index < 0:
+                        token_index += 1
+                        # When we skip a token, we increase our tolerance, so we have a chance of catching back up.
+                        allowed_skipped_whitespace += 1 + min_allowed_skipped_whitespace
+                        continue
+
+                    # Did we jump too far?
+                    non_whitespace_chars_skipped = sum(
+                        1 for c in whole_text[text_index:token_start_index] if not c.isspace()
+                    )
+                    if non_whitespace_chars_skipped > allowed_skipped_whitespace:
+                        # Too many skipped characters. Something is wrong. Ignore this token.
+                        token_index += 1
+                        # When we skip a token, we increase our tolerance, so we have a chance of catching back up.
+                        allowed_skipped_whitespace += 1 + min_allowed_skipped_whitespace
+                        continue
+                    allowed_skipped_whitespace = min_allowed_skipped_whitespace
+
+                    tokens[token_index].idx = token_start_index
+                    text_index = token_start_index + len(token_text)
+                    token_index += 1
 
         return tokens
 
@@ -231,7 +241,7 @@ class PretrainedTransformerTokenizer(Tokenizer):
         offsets = []
         cumulative = starting_offset
         for token in tokens:
-            subword_wordpieces = self.tokenizer.encode(token, add_special_tokens=False)
+            subword_wordpieces = self.tokenizer.encode(token, add_special_tokens=False if not self._use_fast else True)
             if len(subword_wordpieces) == 0:
                 subword_wordpieces = [self.tokenizer.unk_token_id]
 
@@ -296,6 +306,7 @@ class PretrainedTransformerTokenizer(Tokenizer):
             else:
                 num_end += 1
 
-        assert num_start + num_middle + num_end == self.tokenizer.num_added_tokens(pair=True)
-        assert num_start + num_end == self.tokenizer.num_added_tokens(pair=False)
+        if not self._use_fast:
+            assert num_start + num_middle + num_end == self.tokenizer.num_added_tokens(pair=True)
+            assert num_start + num_end == self.tokenizer.num_added_tokens(pair=False)
         return num_start, num_middle, num_end
