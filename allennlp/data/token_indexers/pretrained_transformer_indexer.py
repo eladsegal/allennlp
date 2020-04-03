@@ -95,10 +95,10 @@ class PretrainedTransformerIndexer(TokenIndexer):
                 Your tokens will still be correctly indexed, but vocabulary file will not be saved."""
             )
 
-        # update added tokens
-        for word, idx in self._tokenizer.added_tokens_encoder.items():
-            vocab._token_to_index[self._namespace][word] = idx
-            vocab._index_to_token[self._namespace][idx] = word
+            # update added tokens
+            for word, idx in self._tokenizer.added_tokens_encoder.items():
+                vocab._token_to_index[self._namespace][word] = idx
+                vocab._index_to_token[self._namespace][idx] = word
 
         self._added_to_vocabulary = True
 
