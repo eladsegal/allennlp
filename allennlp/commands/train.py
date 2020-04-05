@@ -60,6 +60,8 @@ from allennlp.training import util as training_util
 
 logger = logging.getLogger(__name__)
 
+from shutil import copyfile
+ORIGINAL_CONFIG_NAME = "original_config.jsonnet"
 
 @Subcommand.register("train")
 class Train(Subcommand):
@@ -200,6 +202,7 @@ def train_model_from_file(
         node_rank=node_rank,
         include_package=include_package,
         dry_run=dry_run,
+        original_config_file=parameter_filename
     )
 
 
@@ -213,6 +216,7 @@ def train_model(
     include_package: List[str] = None,
     batch_weight_key: str = "",
     dry_run: bool = False,
+    original_config_file: str = None
 ) -> Optional[Model]:
     """
     Trains the model specified in the given :class:`Params` object, using the data and training
@@ -250,6 +254,8 @@ def train_model(
     """
     training_util.create_serialization_dir(params, serialization_dir, recover, force)
     params.to_file(os.path.join(serialization_dir, CONFIG_NAME))
+    if original_config_file is not None:
+        copyfile(original_config_file, os.path.join(serialization_dir, ORIGINAL_CONFIG_NAME))
 
     distributed_params = params.params.pop("distributed", None)
     # If distributed isn't in the config and the config contains strictly
