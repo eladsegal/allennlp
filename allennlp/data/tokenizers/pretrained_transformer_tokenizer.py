@@ -108,6 +108,7 @@ class PretrainedTransformerTokenizer(Tokenizer):
             stride=self._stride,
             truncation_strategy=self._truncation_strategy,
             return_tensors=None,
+            return_token_type_ids=True,
             return_offsets_mapping=self._use_fast
         )
         # token_ids contains a final list with ids for both regular and special tokens

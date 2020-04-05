@@ -395,7 +395,8 @@ def prepare_global_logging_new(
     if os.environ.get("ALLENNLP_DEBUG"):
         LEVEL = logging.DEBUG
     else:
-        LEVEL = logging.INFO
+        level_name = os.environ.get("ALLENNLP_LOG_LEVEL")
+        LEVEL = logging._nameToLevel.get(level_name, logging.INFO)
 
     if rank == 0:
         # stdout/stderr handlers are added only for the
@@ -696,11 +697,13 @@ def is_distributed() -> bool:
 
 def sanitize_wordpiece(wordpiece: str) -> str:
     """
-    Sanitizes wordpieces from BERT or RoBERTa tokenizers.
+    Sanitizes wordpieces from BERT, RoBERTa or ALBERT tokenizers.
     """
     if wordpiece.startswith("##"):
         return wordpiece[2:]
     elif wordpiece.startswith("Ġ"):
+        return wordpiece[1:]
+    elif wordpiece.startswith("▁"):
         return wordpiece[1:]
     else:
         return wordpiece
