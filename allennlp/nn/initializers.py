@@ -384,6 +384,27 @@ class PretrainedModelInitializer(Initializer):
     def __init__(
         self, weights_file_path: str, parameter_name_overrides: Dict[str, str] = None
     ) -> None:
+
+        # Causes imports failure when outside
+        from allennlp.models.archival import _cleanup_archive_dir, _WEIGHTS_NAME
+        from allennlp.nn import util as nn_util
+        import atexit
+        import tempfile
+        import tarfile
+        import os
+
+        if weights_file_path.endswith(".tar.gz"):
+            # Extract archive to temp dir
+            tempdir = tempfile.mkdtemp()
+            logger.info(f"extracting archive file {weights_file_path} to temp dir {tempdir}")
+            with tarfile.open(weights_file_path, "r:gz") as archive:
+                archive.extractall(tempdir)
+            # Postpone cleanup until exit in case the unarchived contents are needed outside
+            # this function.
+            atexit.register(_cleanup_archive_dir, tempdir)
+
+            weights_file_path = os.path.join(tempdir, _WEIGHTS_NAME)
+
         self.weights: Dict[str, torch.Tensor] = torch.load(weights_file_path)
         self.parameter_name_overrides = parameter_name_overrides or {}
 
