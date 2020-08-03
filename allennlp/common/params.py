@@ -424,9 +424,10 @@ class Params(MutableMapping):
         parameters (if there are any).
         """
         if self.params:
-            raise ConfigurationError(
-                "Extra parameters passed to {}: {}".format(class_name, self.params)
-            )
+            if not self.params.get('allow_extra_params', False):
+                raise ConfigurationError(
+                    "Extra parameters passed to {}: {}".format(class_name, self.params)
+                )
 
     def __getitem__(self, key):
         if key in self.params:
