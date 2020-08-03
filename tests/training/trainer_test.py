@@ -9,10 +9,6 @@ from typing import Any, Dict, List
 import math
 import pytest
 
-try:
-    from apex import amp
-except ImportError:
-    amp = None
 import torch
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
@@ -990,11 +986,50 @@ class TestTrainer(TrainerTestBase):
         expected_calls = [epoch for epoch in range(-1, 4)]
         assert trainer.epoch_callback_calls == expected_calls
 
+    def test_total_loss_is_average_of_batch_loss(self):
 
-class TestApexTrainer(TrainerTestBase):
-    @requires_gpu
-    @pytest.mark.skipif(amp is None, reason="Apex is not installed.")
-    def test_trainer_can_run_amp(self):
+        batches_per_epoch = 3
+
+        data_loader_custom_epoch_lazy = PyTorchDataLoader(
+            self.instances_lazy,
+            batch_size=2,
+            collate_fn=allennlp_collate,
+            batches_per_epoch=batches_per_epoch,
+        )
+
+        class FakeBatchCallback(BatchCallback):
+            def __call__(
+                self,
+                trainer: "GradientDescentTrainer",
+                batch_inputs: List[List[TensorDict]],
+                batch_outputs: List[Dict[str, Any]],
+                epoch: int,
+                batch_number: int,
+                is_training: bool,
+                is_master: bool,
+            ) -> None:
+                if not hasattr(trainer, "batch_losses"):
+                    trainer.batch_losses = []  # type: ignore
+                trainer.batch_losses.append(batch_outputs[0]["loss"].item())  # type: ignore
+
+        trainer = GradientDescentTrainer(
+            self.model,
+            self.optimizer,
+            data_loader_custom_epoch_lazy,
+            num_epochs=1,
+            batch_callbacks=[FakeBatchCallback()],
+        )
+        metrics = trainer.train()
+
+        assert metrics["training_loss"] == float(sum(trainer.batch_losses) / batches_per_epoch)
+
+
+@requires_gpu
+class TestAmpTrainer(TrainerTestBase):
+    @pytest.mark.parametrize(
+        "grad_norm, num_gradient_accumulation_steps", [(None, 1), (1.0, 1), (1.0, 2)]
+    )
+    def test_trainer_can_run_amp(self, grad_norm, num_gradient_accumulation_steps):
         self.model.cuda()
         trainer = GradientDescentTrainer(
             self.model,
@@ -1002,7 +1037,9 @@ class TestApexTrainer(TrainerTestBase):
             self.data_loader,
             num_epochs=2,
             cuda_device=0,
-            opt_level="O1",
+            use_amp=True,
+            grad_norm=True,
+            num_gradient_accumulation_steps=num_gradient_accumulation_steps,
         )
         _ = trainer.train()
 

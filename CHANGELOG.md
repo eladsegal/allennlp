@@ -7,7 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [v1.1.0rc1](https://github.com/allenai/allennlp/releases/tag/v1.0.0rc1) - 2020-07-14
+## [v1.1.0rc2](https://github.com/allenai/allennlp/releases/tag/v1.1.0rc2) - 2020-07-31
+
+### Changed
+
+- Upgraded PyTorch requirement to 1.6.
+- Replaced the NVIDIA Apex AMP module with torch's native AMP module. The default trainer (`GradientDescentTrainer`)
+  now takes a `use_amp: bool` parameter instead of the old `opt_level: str` parameter.
+
+### Fixed
+
+- Removed unnecessary warning about deadlocks in `DataLoader`.
+- Fixed testing models that only return a loss when they are in training mode.
+- Fixed a bug in `FromParams` that caused silent failure in case of the parameter type being `Optional[Union[...]]`.
+
+### Added
+
+- Added the option to specify `requires_grad: false` within an optimizer's parameter groups.
+- Added the `file-friendly-logging` flag back to the `train` command. Also added this flag to the `predict`, `evaluate`, and `find-learning-rate` commands.
+
+### Removed
+
+- Removed the `opt_level` parameter to `Model.load` and `load_archive`. In order to use AMP with a loaded
+  model now, just run the model's forward pass within torch's [`autocast`](https://pytorch.org/docs/stable/amp.html#torch.cuda.amp.autocast)
+  context.
+
+## [v1.1.0rc1](https://github.com/allenai/allennlp/releases/tag/v1.1.0rc1) - 2020-07-14
 
 ### Fixed
 
@@ -31,12 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in case it does not have a tokenizer.
 - `reg_loss` is only now returned for models that have some regularization penalty configured.
 - Fixed a bug that prevented `cached_path` from downloading assets from GitHub releases.
-- Fixed a bug that erronously increased last label's false positive count in calculating fbeta metrics.
+- Fixed a bug that erroneously increased last label's false positive count in calculating fbeta metrics.
 - `Tqdm` output now looks much better when the output is being piped or redirected.
 - Small improvements to how the API documentation is rendered.
+- Only show validation progress bar from main process in distributed training.
 
 ### Added
 
+- Adjust beam search to support multi-layer decoder.
 - A method to ModelTestCase for running basic model tests when you aren't using config files.
 - Added some convenience methods for reading files.
 - Added an option to `file_utils.cached_path` to automatically extract archives.
@@ -49,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scalar mix of all hidden layers from the transformer model instead of just the last layer. To utilize
   this, just set `last_layer_only` to `False`.
 - `cached_path()` can now read files inside of archives.
+- Training metrics now include `batch_loss` and `batch_reg_loss` in addition to aggregate loss across number of batches.
 
 ### Changed
 

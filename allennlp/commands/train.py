@@ -7,7 +7,8 @@ which to write the results.
 import argparse
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from os import PathLike
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.distributed as dist
@@ -17,7 +18,7 @@ from overrides import overrides
 from allennlp.commands.subcommand import Subcommand
 from allennlp.common import Params, Registrable, Lazy
 from allennlp.common.checks import check_for_gpu, ConfigurationError
-from allennlp.common.logging import prepare_global_logging
+from allennlp.common import logging as common_logging
 from allennlp.common import util as common_util
 from allennlp.common.plugins import import_plugins
 from allennlp.data import DatasetReader, Vocabulary
@@ -86,6 +87,12 @@ class Train(Subcommand):
             help="do not train a model, but create a vocabulary, show dataset statistics and "
             "other training information",
         )
+        subparser.add_argument(
+            "--file-friendly-logging",
+            action="store_true",
+            default=False,
+            help="outputs tqdm status on separate lines and slows tqdm refresh rate",
+        )
 
         subparser.set_defaults(func=train_model_from_args)
 
@@ -105,18 +112,20 @@ def train_model_from_args(args: argparse.Namespace):
         node_rank=args.node_rank,
         include_package=args.include_package,
         dry_run=args.dry_run,
+        file_friendly_logging=args.file_friendly_logging,
     )
 
 
 def train_model_from_file(
-    parameter_filename: str,
-    serialization_dir: str,
+    parameter_filename: Union[str, PathLike],
+    serialization_dir: Union[str, PathLike],
     overrides: str = "",
     recover: bool = False,
     force: bool = False,
     node_rank: int = 0,
     include_package: List[str] = None,
     dry_run: bool = False,
+    file_friendly_logging: bool = False,
 ) -> Optional[Model]:
     """
     A wrapper around [`train_model`](#train_model) which loads the params from a file.
@@ -143,6 +152,9 @@ def train_model_from_file(
     dry_run : `bool`, optional (default=`False`)
         Do not train a model, but create a vocabulary, show dataset statistics and other training
         information.
+    file_friendly_logging : `bool`, optional (default=`False`)
+        If `True`, we add newlines to tqdm output, even on an interactive terminal, and we slow
+        down tqdm's output to only once every 10 seconds.
 
     # Returns
 
@@ -159,18 +171,20 @@ def train_model_from_file(
         node_rank=node_rank,
         include_package=include_package,
         dry_run=dry_run,
-        original_config_file=parameter_filename
+        file_friendly_logging=file_friendly_logging,
+        original_config_file=parameter_filename,
     )
 
 
 def train_model(
     params: Params,
-    serialization_dir: str,
+    serialization_dir: Union[str, PathLike],
     recover: bool = False,
     force: bool = False,
     node_rank: int = 0,
     include_package: List[str] = None,
     dry_run: bool = False,
+    file_friendly_logging: bool = False,
     original_config_file: str = None,
 ) -> Optional[Model]:
     """
@@ -196,12 +210,17 @@ def train_model(
     dry_run : `bool`, optional (default=`False`)
         Do not train a model, but create a vocabulary, show dataset statistics and other training
         information.
+    file_friendly_logging : `bool`, optional (default=`False`)
+        If `True`, we add newlines to tqdm output, even on an interactive terminal, and we slow
+        down tqdm's output to only once every 10 seconds.
 
     # Returns
 
     best_model : `Optional[Model]`
         The model with the best epoch weights or `None` if in dry run.
     """
+    common_logging.FILE_FRIENDLY_LOGGING = file_friendly_logging
+
     training_util.create_serialization_dir(params, serialization_dir, recover, force)
     params.to_file(os.path.join(serialization_dir, CONFIG_NAME))
     if original_config_file is not None:
@@ -217,6 +236,7 @@ def train_model(
             serialization_dir=serialization_dir,
             include_package=include_package,
             dry_run=dry_run,
+            file_friendly_logging=file_friendly_logging,
         )
 
         if not dry_run:
@@ -280,6 +300,7 @@ def train_model(
                 master_port,
                 world_size,
                 device_ids,
+                file_friendly_logging,
             ),
             nprocs=num_procs,
         )
@@ -294,7 +315,7 @@ def train_model(
 def _train_worker(
     process_rank: int,
     params: Params,
-    serialization_dir: str,
+    serialization_dir: Union[str, PathLike],
     include_package: List[str] = None,
     dry_run: bool = False,
     node_rank: int = 0,
@@ -302,6 +323,7 @@ def _train_worker(
     master_port: int = 29500,
     world_size: int = 1,
     distributed_device_ids: List[int] = None,
+    file_friendly_logging: bool = False,
 ) -> Optional[Model]:
     """
     Helper to train the configured model/experiment. In distributed mode, this is spawned as a
@@ -333,13 +355,18 @@ def _train_worker(
         The number of processes involved in distributed training.
     distributed_device_ids: `List[str]`, optional
         IDs of the devices used involved in distributed training.
+    file_friendly_logging : `bool`, optional (default=`False`)
+        If `True`, we add newlines to tqdm output, even on an interactive terminal, and we slow
+        down tqdm's output to only once every 10 seconds.
 
     # Returns
 
     best_model : `Optional[Model]`
         The model with the best epoch weights or `None` if in distributed training or in dry run.
     """
-    prepare_global_logging(
+    common_logging.FILE_FRIENDLY_LOGGING = file_friendly_logging
+
+    common_logging.prepare_global_logging(
         serialization_dir, rank=process_rank, world_size=world_size,
     )
     common_util.prepare_environment(params)
