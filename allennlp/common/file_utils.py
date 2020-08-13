@@ -40,7 +40,6 @@ DATASET_CACHE = CACHE_DIRECTORY
 
 # Warn if the user is still using the deprecated cache directory.
 if os.path.exists(DEPRECATED_CACHE_DIRECTORY):
-    logger = logging.getLogger(__name__)
     logger.warning(
         f"Deprecated cache directory found ({DEPRECATED_CACHE_DIRECTORY}).  "
         f"Please remove this directory from your system to free up space."
@@ -312,7 +311,7 @@ def _find_latest_cached(url: str, cache_dir: Union[str, Path]) -> Optional[str]:
             continue
         mtime = os.path.getmtime(path)
         candidates.append((path, mtime))
-    # Sort candidates by modification time, neweste first.
+    # Sort candidates by modification time, newest first.
     candidates.sort(key=lambda x: x[1], reverse=True)
     if candidates:
         return candidates[0][0]
@@ -382,7 +381,7 @@ def get_from_cache(url: str, cache_dir: Union[str, Path] = None) -> str:
         # target resource, if it exists. We'll only throw an exception if we
         # haven't cached the resource at all yet.
         logger.warning(
-            "Connection error occured while trying to fetch ETag for %s. "
+            "Connection error occurred while trying to fetch ETag for %s. "
             "Will attempt to use latest cached version of resource",
             url,
         )
