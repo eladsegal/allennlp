@@ -29,6 +29,7 @@ from allennlp.training.trainer import Trainer
 from allennlp.training import util as training_util
 
 from shutil import copyfile
+
 ORIGINAL_CONFIG_NAME = "original_config.jsonnet"
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ def train_model(
     training_util.create_serialization_dir(params, serialization_dir, recover, force)
     params.to_file(os.path.join(serialization_dir, CONFIG_NAME))
     if original_config_file is not None:
-            copyfile(original_config_file, os.path.join(serialization_dir, ORIGINAL_CONFIG_NAME))
+        copyfile(original_config_file, os.path.join(serialization_dir, ORIGINAL_CONFIG_NAME))
 
     distributed_params = params.params.pop("distributed", None)
     # If distributed isn't in the config and the config contains strictly

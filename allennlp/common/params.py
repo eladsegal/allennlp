@@ -425,7 +425,7 @@ class Params(MutableMapping):
         parameters (if there are any).
         """
         if self.params:
-            if not self.params.get('allow_extra_params', False):
+            if not self.params.get("allow_extra_params", False):
                 raise ConfigurationError(
                     "Extra parameters passed to {}: {}".format(class_name, self.params)
                 )
