@@ -129,6 +129,10 @@ def archive_model(
         archive.add(weights_file, arcname=_WEIGHTS_NAME)
         archive.add(os.path.join(serialization_dir, "vocabulary"), arcname="vocabulary")
 
+        tokenizer_path = os.path.join(serialization_dir, "tokenizer")
+        if os.path.exists(tokenizer_path):
+            archive.add(tokenizer_path, arcname="tokenizer")
+
 
 def load_archive(
     archive_file: str, cuda_device: int = -1, overrides: str = "", weights_file: str = None,
