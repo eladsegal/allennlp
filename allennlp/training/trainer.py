@@ -873,6 +873,15 @@ class GradientDescentTrainer(Trainer):
                 elif key.startswith("worker_") and key.endswith("_memory_MB"):
                     metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
 
+            if self._master:
+                self._checkpointer.save_checkpoint(
+                    epoch, self, is_best_so_far=self._metric_tracker.is_best_so_far()
+                )
+
+            # Wait for the master to finish saving the checkpoint
+            if self._distributed:
+                dist.barrier()
+
             if self._validation_data_loader is not None:
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it.
@@ -940,15 +949,6 @@ class GradientDescentTrainer(Trainer):
                 self._learning_rate_scheduler.step(this_epoch_val_metric)
             if self._momentum_scheduler:
                 self._momentum_scheduler.step(this_epoch_val_metric)
-
-            if self._master:
-                self._checkpointer.save_checkpoint(
-                    epoch, self, is_best_so_far=self._metric_tracker.is_best_so_far()
-                )
-
-            # Wait for the master to finish saving the checkpoint
-            if self._distributed:
-                dist.barrier()
 
             for callback in self._epoch_callbacks:
                 callback(self, metrics=metrics, epoch=epoch, is_master=self._master)

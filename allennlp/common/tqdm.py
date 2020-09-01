@@ -63,7 +63,7 @@ class TqdmToLogsWriter(object):
 
         # Every 10 seconds we also log the message.
         now = time()
-        if now - self.last_message_written_time >= 10 or "100%" in message:
+        if True:  # now - self.last_message_written_time >= 10 or "100%" in message:
             if file_friendly_message is None:
                 file_friendly_message = replace_cr_with_newline(message)
             for message in file_friendly_message.split("\n"):
