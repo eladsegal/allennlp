@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v1.1.0rc4](https://github.com/allenai/allennlp/releases/tag/v1.1.0rc4) - 2020-08-20
+
+### Added
+
+- Added a workflow to GitHub Actions that will automatically close unassigned stale issues and
+  ping the assignees of assigned stale issues.
+
+### Fixed
+
+- Fixed a bug in distributed metrics that caused nan values due to repeated addition of an accumulated variable.
+
 ## [v1.1.0rc3](https://github.com/allenai/allennlp/releases/tag/v1.1.0rc3) - 2020-08-12
 
 ### Fixed
@@ -17,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Also, when `max_length` was set to a non-`None` value, several warnings would appear
   for certain transformer models around the use of the `truncation` parameter.
 - Fixed evaluation of all metrics when using distributed training.
+- Added a `py.typed` marker. Fixed type annotations in `allennlp.training.util`.
+- Fixed problem with automatically detecting whether tokenization is necessary.
+  This affected primarily the Roberta SST model.
+- Improved help text for using the --overrides command line flag.
+
 
 ## [v1.1.0rc2](https://github.com/allenai/allennlp/releases/tag/v1.1.0rc2) - 2020-07-31
 

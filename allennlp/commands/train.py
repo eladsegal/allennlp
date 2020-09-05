@@ -75,7 +75,11 @@ class Train(Subcommand):
             "--overrides",
             type=str,
             default="",
-            help="a JSON structure used to override the experiment configuration",
+            help=(
+                "a json(net) structure used to override the experiment configuration, e.g., "
+                "'{\"iterator.batch_size\": 16}'.  Nested parameters can be specified either"
+                " with nested dictionaries or with dot syntax."
+            ),
         )
 
         subparser.add_argument(
@@ -85,8 +89,10 @@ class Train(Subcommand):
         subparser.add_argument(
             "--dry-run",
             action="store_true",
-            help="do not train a model, but create a vocabulary, show dataset statistics and "
-            "other training information",
+            help=(
+                "do not train a model, but create a vocabulary, show dataset statistics and "
+                "other training information"
+            ),
         )
         subparser.add_argument(
             "--file-friendly-logging",
@@ -264,7 +270,7 @@ def train_model(
         world_size = num_nodes * num_procs
 
         logging.info(
-            f"Switching to distributed training mode since multiple GPUs are configured | "
+            "Switching to distributed training mode since multiple GPUs are configured | "
             f"Master is at: {master_addr}:{master_port} | Rank of this node: {node_rank} | "
             f"Number of workers in this node: {num_procs} | Number of nodes: {num_nodes} | "
             f"World size: {world_size}"
