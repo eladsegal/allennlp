@@ -874,9 +874,7 @@ class GradientDescentTrainer(Trainer):
                     metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
 
             if self._master:
-                self._checkpointer.save_checkpoint(
-                    epoch, self, is_best_so_far=self._metric_tracker.is_best_so_far()
-                )
+                self._checkpointer.save_checkpoint(epoch, self)
 
             # Wait for the master to finish saving the checkpoint
             if self._distributed:
@@ -942,6 +940,14 @@ class GradientDescentTrainer(Trainer):
                 common_util.dump_metrics(
                     os.path.join(self._serialization_dir, f"metrics_epoch_{epoch}.json"), metrics
                 )
+
+            if self._master and self._metric_tracker.is_best_so_far():
+                logger.info("Best validation performance so far.")
+                self._checkpointer.save_as_best(epoch)
+
+            # Wait for the master to finish copying the best checkpoint
+            if self._distributed:
+                dist.barrier()
 
             # The Scheduler API is agnostic to whether your schedule requires a validation metric -
             # if it doesn't, the validation metric passed here is ignored.

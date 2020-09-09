@@ -89,7 +89,6 @@ class Checkpointer(Registrable):
         self,
         epoch: Union[int, str],
         trainer: "allennlp.training.trainer.Trainer",
-        is_best_so_far: bool = False,
     ) -> None:
         if self._serialization_dir is not None:
             with trainer.get_checkpoint_state() as state:
@@ -102,15 +101,6 @@ class Checkpointer(Registrable):
                     self._serialization_dir, "training_state_epoch_{}.th".format(epoch)
                 )
                 torch.save({**training_states, "epoch": epoch}, training_path)
-
-            # The main checkpointing logic is now done, this is just shuffling files around, to keep
-            # track of best weights, and to remove old checkpoints, if desired.
-            if is_best_so_far:
-                logger.info(
-                    "Best validation performance so far. Copying weights to '%s/best.th'.",
-                    self._serialization_dir,
-                )
-                shutil.copyfile(model_path, os.path.join(self._serialization_dir, "best.th"))
 
             if (
                 self._num_serialized_models_to_keep is not None
@@ -139,6 +129,17 @@ class Checkpointer(Registrable):
                         for fname in paths_to_remove[1:]:
                             if os.path.isfile(fname):
                                 os.remove(fname)
+
+    def save_as_best(self, epoch):
+        if self._serialization_dir is not None:
+            model_path = os.path.join(
+                self._serialization_dir, "model_state_epoch_{}.th".format(epoch)
+            )
+            logger.info(
+                "Copying weights to '%s/best.th'.",
+                self._serialization_dir,
+            )
+            shutil.copyfile(model_path, os.path.join(self._serialization_dir, "best.th"))
 
     def find_latest_checkpoint(self) -> Tuple[str, str]:
         """

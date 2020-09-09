@@ -29,7 +29,8 @@ class NoOpTrainer(Trainer):
         self.model.vocab.save_to_files(os.path.join(self._serialization_dir, "vocabulary"))
 
         checkpointer = Checkpointer(self._serialization_dir)
-        checkpointer.save_checkpoint(epoch=0, trainer=self, is_best_so_far=True)
+        checkpointer.save_checkpoint(epoch=0, trainer=self)
+        checkpointer.save_as_best(epoch=0)
         return {}
 
     @contextmanager

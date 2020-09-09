@@ -56,10 +56,23 @@ class TestCheckpointer(AllenNlpTestCase):
             checkpointer.save_checkpoint(
                 epoch=e,
                 trainer=FakeTrainer(model_state={"epoch": e}, training_states={"epoch": e}),
-                is_best_so_far=False,
             )
         models, training = self.retrieve_and_delete_saved()
         assert models == training == target
+
+    def test_save_as_best(self):
+        checkpointer = Checkpointer(serialization_dir=self.TEST_DIR)
+
+        e = 0
+        checkpointer.save_checkpoint(
+            epoch=e,
+            trainer=FakeTrainer(model_state={"epoch": e}, training_states={"epoch": e}),
+        )
+        checkpointer.save_as_best(0)
+
+        serialization_files = os.listdir(self.TEST_DIR)
+        assert "best.th" in serialization_files
+        os.remove(os.path.join(self.TEST_DIR, "best.th"))
 
     def test_keep_zero(self):
         checkpointer = Checkpointer(
@@ -69,7 +82,6 @@ class TestCheckpointer(AllenNlpTestCase):
             checkpointer.save_checkpoint(
                 epoch=e,
                 trainer=FakeTrainer(model_state={"epoch": e}, training_states={"epoch": e}),
-                is_best_so_far=True,
             )
         files = os.listdir(self.TEST_DIR)
         assert "model_state_epoch_1.th" not in files
@@ -96,7 +108,6 @@ class TestCheckpointer(AllenNlpTestCase):
             checkpointer.save_checkpoint(
                 epoch=e,
                 trainer=FakeTrainer(model_state={"epoch": e}, training_states={"epoch": e}),
-                is_best_so_far=False,
             )
         models, training = self.retrieve_and_delete_saved()
         assert models == training == target
