@@ -133,6 +133,10 @@ def archive_model(
         if os.path.exists(tokenizer_path):
             archive.add(tokenizer_path, arcname="tokenizer")
 
+        pending_tokenizer_path = os.path.join(serialization_dir, "pending_tokenizer")
+        if os.path.exists(pending_tokenizer_path):
+            archive.add(pending_tokenizer_path, arcname="pending_tokenizer")
+
 
 def load_archive(
     archive_file: str,
