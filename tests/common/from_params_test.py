@@ -970,7 +970,13 @@ class TestFromParams(AllenNlpTestCase):
             def __init__(self, a: int, **kwargs) -> None:
                 self.a = a
 
-        Bar.from_params(Params({"a": 2}))
-
         bar = Bar.from_params(Params({"a": 2}))
         assert bar.a == 2
+
+    def test_from_params_has_args(self):
+        class Foo(FromParams):
+            def __init__(self, a: int, *args) -> None:
+                self.a = a
+
+        foo = Foo.from_params(Params({"a": 2}))
+        assert foo.a == 2

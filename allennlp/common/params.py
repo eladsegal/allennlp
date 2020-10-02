@@ -458,7 +458,10 @@ class Params(MutableMapping):
 
     @classmethod
     def from_file(
-        cls, params_file: Union[str, PathLike], params_overrides: str = "", ext_vars: dict = None
+        cls,
+        params_file: Union[str, PathLike],
+        params_overrides: Union[str, Dict[str, Any]] = "",
+        ext_vars: dict = None,
     ) -> "Params":
         """
         Load a `Params` object from a configuration file.
@@ -469,7 +472,7 @@ class Params(MutableMapping):
 
             The path to the configuration file to load.
 
-        params_overrides: `str`, optional
+        params_overrides: `Union[str, Dict[str, Any]]`, optional (default = `""`)
 
             A dict of overrides that can be applied to final object.
             e.g. {"model.embedding_dim": 10}
@@ -491,6 +494,8 @@ class Params(MutableMapping):
 
         file_dict = json.loads(evaluate_file(params_file, ext_vars=ext_vars))
 
+        if isinstance(params_overrides, dict):
+            params_overrides = json.dumps(params_overrides)
         overrides_dict = parse_overrides(params_overrides)
         param_dict = with_fallback(preferred=overrides_dict, fallback=file_dict)
 

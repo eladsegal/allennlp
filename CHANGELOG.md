@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added a `build-vocab` subcommand that can be used to build a vocabulary from a training config file.
+- Added `tokenizer_kwargs` argument to `PretrainedTransformerMismatchedIndexer`.
+- Added `tokenizer_kwargs` and `transformer_kwargs` arguments to `PretrainedTransformerMismatchedEmbedder`.
+- Added official support for Python 3.8.
+- Added a script: `scripts/release_notes.py`, which automatically prepares markdown release notes from the
+  CHANGELOG and commit history.
+- Added a flag `--predictions-output-file` to the `evaluate` command, which tells AllenNLP to write the
+  predictions from the given dataset to the file as JSON lines.
+- Added the ability to ignore certain missing keys when loading a model from an archive. This is done
+  by adding a class-level variable called `authorized_missing_keys` to any PyTorch module that a `Model` uses.
+  If defined, `authorized_missing_keys` should be a list of regex string patterns.
+- Added `FBetaMultiLabelMeasure`, a multi-label Fbeta metric. This is a subclass of the existing `FBetaMeasure`.
+- Added ability to pass additional key word arguments to `cached_transformers.get()`, which will be passed on to `AutoModel.from_pretrained()`.
+- Added an `overrides` argument to `Predictor.from_path()`.
+- Added a `cached-path` command.
+- Added a function `inspect_cache` to `common.file_utils` that prints useful information about the cache. This can also 
+  be used from the `cached-path` command with `allennlp cached-path --inspect`.
+- Added a function `remove_cache_entries` to `common.file_utils` that removes any cache entries matching the given
+  glob patterns. This can used from the `cached-path` command with `allennlp cached-path --remove some-files-*`.
+
+### Changed
+
+- Allow overrides to be JSON string or `dict`.
+- `transformers` dependency updated to version 3.1.0.
+- When `cached_path` is called on a local archive with `extract_archive=True`, the archive is now extracted into a unique subdirectory of the cache root instead of a subdirectory of the archive's directory. The extraction directory is also unique to the modification time of the archive, so if the file changes, subsequent calls to `cached_path` will know to re-extract the archive.
+- Removed the `truncation_strategy` parameter to `PretrainedTransformerTokenizer`. The way we're calling the tokenizer, the truncation strategy takes no effect anyways.
+
+### Fixed
+
+- Class decorators now displayed in API docs.
+- Fixed up the documentation for the `allennlp.nn.beam_search` module.
+- Ignore `*args` when constructing classes with `FromParams`.
+- Ensured some consistency in the types of the values that metrics return.
+- Fix a PyTorch warning by explicitly providing the `as_tuple` argument (leaving
+  it as its default value of `False`) to `Tensor.nonzero()`.
+- Remove temporary directory when extracting model archive in `load_archive`
+  at end of function rather than via `atexit`.
+- Fixed a bug where using `cached_path()` offline could return a cached resource's lock file instead
+  of the cache file.
+- Fixed a bug where `cached_path()` would fail if passed a `cache_dir` with the user home shortcut `~/`.
+- Fixed a bug in our doc building script where markdown links did not render properly
+  if the "href" part of the link (the part inside the `()`) was on a new line.
+- Changed how gradients are zeroed out with an optimization. See [this video from NVIDIA](https://www.youtube.com/watch?v=9mS1fIYj1So)
+  at around the 9 minute mark.
+
+
+## [v1.1.0](https://github.com/allenai/allennlp/releases/tag/v1.1.0) - 2020-09-08
+
 ### Fixed
 
 - Fixed handling of some edge cases when constructing classes with `FromParams` where the class
@@ -15,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PretrainedTransformerMismatchedIndexer`.
 - Improved robustness of `cached_path` when extracting archives so that the cache won't be corrupted
   if a failure occurs during extraction.
+- Fixed a bug with the `average` and `evalb_bracketing_score` metrics in distributed training.
 
 ### Added
 
