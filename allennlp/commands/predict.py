@@ -96,6 +96,11 @@ class Predict(Subcommand):
             help="outputs tqdm status on separate lines and slows tqdm refresh rate",
         )
 
+        subparser.add_argument(
+            "--extend-vocab", action="store_true", help="if specified, we will use the instances in your new dataset to "
+            "extend your vocabulary."
+        )
+
         subparser.set_defaults(func=_predict)
 
         return subparser
@@ -124,6 +129,7 @@ class _PredictManager:
         batch_size: int,
         print_to_console: bool,
         has_dataset_reader: bool,
+        extend_vocab: bool,
     ) -> None:
 
         self._predictor = predictor
@@ -132,6 +138,7 @@ class _PredictManager:
         self._batch_size = batch_size
         self._print_to_console = print_to_console
         self._dataset_reader = None if not has_dataset_reader else predictor._dataset_reader
+        self._extend_vocab = extend_vocab
 
     def _predict_json(self, batch_data: List[JsonDict]) -> Iterator[str]:
         if len(batch_data) == 1:
@@ -183,7 +190,14 @@ class _PredictManager:
         has_reader = self._dataset_reader is not None
         index = 0
         if has_reader:
-            for batch in lazy_groups_of(self._get_instance_data(), self._batch_size):
+            if self._extend_vocab:
+                instances = list(self._get_instance_data())
+                self._predictor._model.vocab.extend_from_instances(instances=instances)
+                self._predictor._model.extend_embedder_vocab()
+            else:
+                instances = self._get_instance_data()
+
+            for batch in lazy_groups_of(instances, self._batch_size):
                 for model_input_instance, result in zip(batch, self._predict_instances(batch)):
                     self._maybe_print_to_console_and_file(index, result, str(model_input_instance))
                     index = index + 1
@@ -216,5 +230,6 @@ def _predict(args: argparse.Namespace) -> None:
         args.batch_size,
         not args.silent,
         args.use_dataset_reader,
+        args.extend_vocab,
     )
     manager.run()
