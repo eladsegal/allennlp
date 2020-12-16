@@ -29,6 +29,8 @@ class NoamLR(LearningRateScheduler):
     def __init__(
         self,
         optimizer: torch.optim.Optimizer,
+        num_epochs: int,
+        num_steps_per_epoch: int,
         model_size: int,
         warmup_steps: int,
         factor: float = 1.0,
@@ -37,6 +39,11 @@ class NoamLR(LearningRateScheduler):
         self.warmup_steps = warmup_steps
         self.factor = factor
         self.model_size = model_size
+
+        total_steps = num_epochs * num_steps_per_epoch
+        if self.warmup_steps > 0 and self.warmup_steps <= 1:
+            self.warmup_steps = round(self.warmup_steps * total_steps)
+
         super().__init__(optimizer, last_epoch=last_epoch)
 
     @overrides

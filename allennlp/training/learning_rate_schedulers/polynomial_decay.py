@@ -48,6 +48,9 @@ class PolynomialDecay(LearningRateScheduler):
 
         self.steps = 0
 
+        if self.warmup_steps > 0 and self.warmup_steps <= 1:
+            self.warmup_steps = round(self.warmup_steps * self.total_steps)
+
         self.step_batch(0)
 
     @overrides
