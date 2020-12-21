@@ -15,7 +15,7 @@ TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
 
 def allennlp_collate(instances: List[Instance]) -> TensorDict:
     batch = Batch(instances)
-    return batch.as_tensor_dict(batch.get_padding_lengths())
+    return batch.as_tensor_dict()
 
 
 class DataLoader(Registrable):
